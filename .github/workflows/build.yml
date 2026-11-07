@@ -8,17 +8,17 @@ on:
 
 jobs:
   build:
-    name: build (${{ matrix.goos }}/${{ matrix.goarch }})
-    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { os: ubuntu-latest,  goos: linux,   goarch: amd64 }
-          - { os: ubuntu-latest,  goos: linux,   goarch: arm64 }
-          - { os: macos-latest,   goos: darwin,  goarch: arm64 }
-          - { os: macos-13,       goos: darwin,  goarch: amd64 }
-          - { os: windows-latest, goos: windows, goarch: amd64 }
+          - { goos: linux,   goarch: amd64 }
+          - { goos: linux,   goarch: arm64 }
+          - { goos: darwin,  goarch: amd64 }
+          - { goos: darwin,  goarch: arm64 }
+          - { goos: windows, goarch: amd64 }
 
     steps:
       - uses: actions/checkout@v4
@@ -29,14 +29,23 @@ jobs:
           cache: true
 
       - name: go vet
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: '0'
         run: go vet ./...
 
       - name: build
         env:
-          CGO_ENABLED: '0'
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-        run: go build -trimpath -ldflags "-s -w" -o out/gitpuller .
+          CGO_ENABLED: '0'
+        run: |
+          mkdir -p out
+          BIN="gitpuller_${GOOS}_${GOARCH}"
+          if [ "$GOOS" = "windows" ]; then BIN="${BIN}.exe"; fi
+          go build -trimpath -ldflags "-s -w" -o "out/$BIN" .
+          ls -lh out
 
       - uses: actions/upload-artifact@v4
         with:
