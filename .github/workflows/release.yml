@@ -42,16 +42,10 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           mkdir -p out
-          go build -trimpath -ldflags "-s -w" -o out/gitpuller .
-
-      - name: rename
-        run: |
-          cd out
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            mv gitpuller.exe "gitpuller_${{ matrix.goos }}_${{ matrix.goarch }}.exe"
-          else
-            mv gitpuller "gitpuller_${{ matrix.goos }}_${{ matrix.goarch }}"
-          fi
+          BIN="gitpuller_${GOOS}_${GOARCH}"
+          if [ "$GOOS" = "windows" ]; then BIN="${BIN}.exe"; fi
+          go build -trimpath -ldflags "-s -w" -o "out/$BIN" .
+          ls -lh out
 
       - uses: softprops/action-gh-release@v2
         with:
