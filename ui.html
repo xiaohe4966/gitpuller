@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GitPuller · 定时自动拉取</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23157a5b'/%3E%3Cg stroke='%23fff' stroke-width='2.4' fill='none' stroke-linecap='round'%3E%3Cpath d='M11 9v9a5 5 0 0 0 5 5h4'/%3E%3C/g%3E%3Cg fill='%23fff'%3E%3Ccircle cx='11' cy='8' r='3'/%3E%3Ccircle cx='21' cy='23' r='3'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#f4f5f7;
+    --card:#ffffff;
+    --line:#e4e7ec;
+    --line-strong:#d3d8e0;
+    --text:#15181c;
+    --muted:#6b7280;
+    --accent:#157a5b;
+    --accent-dark:#0f5f47;
+    --accent-soft:#e6f4ee;
+    --amber:#9a5b0a;
+    --amber-soft:#fdf1d9;
+    --red:#a92a1e;
+    --red-soft:#fbe6e3;
+    --radius:14px;
+    --mono:"SF Mono","JetBrains Mono",Menlo,Consolas,"Courier New",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font:400 15px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:40px;
+  }
+  button,input,select{font:inherit;color:inherit}
+
+  /* ---------- 顶栏 ---------- */
+  .top{
+    position:sticky;top:0;z-index:20;
+    background:rgba(255,255,255,.92);
+    backdrop-filter:saturate(160%) blur(10px);
+    border-bottom:1px solid var(--line);
+    padding:12px 16px;
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  }
+  .brand{display:flex;align-items:center;gap:10px;min-width:0}
+  .brand svg{width:30px;height:30px;flex:none}
+  .brand h1{margin:0;font-size:17px;font-weight:650;letter-spacing:-.2px}
+  .brand .sub{margin:0;font-size:12px;color:var(--muted)}
+  .top-actions{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}
+
+  .pill{
+    display:inline-flex;align-items:center;gap:7px;
+    padding:5px 11px;border-radius:999px;
+    font-size:13px;font-weight:600;
+    border:1px solid var(--line-strong);color:var(--muted);background:#fff;
+  }
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:#a8b0bd}
+  .pill.on{border-color:#b9e3ce;background:var(--accent-soft);color:var(--accent-dark)}
+  .pill.on .dot{background:var(--accent);box-shadow:0 0 0 3px rgba(21,122,91,.16)}
+
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;
+    min-height:38px;padding:0 14px;border-radius:10px;
+    border:1px solid var(--line-strong);background:#fff;
+    font-size:14px;font-weight:550;cursor:pointer;
+    transition:background .15s,border-color .15s,transform .08s;
+    white-space:nowrap;
+  }
+  .btn:hover{background:#f7f8fa;border-color:#c3cad4}
+  .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{background:var(--accent-dark);border-color:var(--accent-dark)}
+  .btn.small{min-height:34px;padding:0 11px;font-size:13px;border-radius:9px}
+  .btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+  .btn.ghost:hover{background:#eff1f4;color:var(--text)}
+  .btn.danger{background:#fff;border-color:#f0c8c3;color:var(--red)}
+  .btn.danger:hover{background:var(--red-soft)}
+  .btn.ghost-danger{background:transparent;border-color:transparent;color:#9aa1ac}
+  .btn.ghost-danger:hover{background:var(--red-soft);color:var(--red)}
+  .btn svg{width:15px;height:15px;flex:none}
+
+  /* ---------- 主体 ---------- */
+  .wrap{max-width:1000px;margin:0 auto;padding:16px}
+
+  .stats{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+  .stat{
+    flex:1 1 140px;background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:10px 13px;min-width:0;
+  }
+  .stat b{display:block;font-size:19px;font-weight:650;letter-spacing:-.3px}
+  .stat span{font-size:12px;color:var(--muted)}
+  .stat.warn b{color:var(--red)}
+
+  /* ---------- 添加面板 ---------- */
+  .panel{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;margin-bottom:14px;
+  }
+  .panel.hidden{display:none}
+  .panel h2{margin:0 0 12px;font-size:15px;font-weight:650}
+  .field{margin-bottom:12px}
+  .field > label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;letter-spacing:.2px}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .row.end{justify-content:flex-end;margin-top:2px}
+  .grow{flex:1 1 200px;min-width:0}
+  input[type=text]{
+    width:100%;min-height:42px;padding:0 12px;border-radius:10px;
+    border:1px solid var(--line-strong);background:#fff;
+    font-size:16px;font-family:var(--mono);
+  }
+  input[type=text]:focus{outline:2px solid rgba(21,122,91,.25);outline-offset:1px;border-color:var(--accent)}
+  select{
+    min-height:36px;padding:0 26px 0 10px;border-radius:9px;
+    border:1px solid var(--line-strong);background:#fff;font-size:13px;cursor:pointer;
+    appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b7280'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 9px center;
+  }
+  .grid2{display:flex;gap:12px;flex-wrap:wrap}
+  .grid2 .field{flex:1 1 160px;min-width:0;margin-bottom:12px}
+  .hint{margin:10px 0 0;font-size:12px;color:var(--muted)}
+
+  /* ---------- 项目卡片 ---------- */
+  .list{display:flex;flex-direction:column;gap:12px}
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 16px;
+    transition:border-color .15s,box-shadow .15s;
+  }
+  .card:hover{border-color:var(--line-strong);box-shadow:0 2px 10px rgba(16,24,40,.04)}
+  .card-top{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap}
+  .card-title{display:flex;align-items:center;gap:8px;min-width:0;flex:1 1 auto;flex-wrap:wrap}
+  .card-title h2{margin:0;font-size:16px;font-weight:650;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip{
+    font-size:11px;font-weight:600;font-family:var(--mono);
+    padding:2px 7px;border-radius:6px;background:var(--accent-soft);color:var(--accent-dark);
+    max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .chip.muted{background:#f0f2f5;color:#5c6470}
+  .status{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;
+  }
+  .status.idle{background:#f0f2f5;color:#5c6470}
+  .status.busy{background:var(--amber-soft);color:var(--amber)}
+  .status.ok{background:var(--accent-soft);color:var(--accent-dark)}
+  .status.fail{background:var(--red-soft);color:var(--red)}
+  .dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+  .status.busy .dot{animation:pulse 1.2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+  .path{
+    margin:8px 0 0;font-family:var(--mono);font-size:12.5px;color:#3d434d;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .meta{margin:4px 0 12px;font-size:12.5px;color:var(--muted);word-break:break-word}
+  .meta .bad{color:var(--red);font-weight:600}
+
+  .controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .spacer{flex:1 1 0;min-width:0}
+
+  .switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;min-height:44px}
+  .switch input{position:absolute;opacity:0;width:1px;height:1px}
+  .slider{
+    position:relative;width:38px;height:22px;border-radius:999px;background:#d5dae2;
+    transition:background .18s;flex:none;
+  }
+  .slider::after{
+    content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 3px rgba(16,24,40,.24);transition:transform .18s;
+  }
+  .switch input:checked + .slider{background:var(--accent)}
+  .switch input:checked + .slider::after{transform:translateX(16px)}
+  .switch input:focus-visible + .slider{outline:2px solid rgba(21,122,91,.3);outline-offset:2px}
+  .switch-label{font-size:12.5px;color:var(--muted);font-weight:550}
+
+  /* ---------- 日志 ---------- */
+  .logbox{margin-top:12px;border:1px solid #232935;border-radius:10px;background:#12161d;overflow:hidden;display:block}
+  .logbox.hidden{display:none}
+  .logbody{
+    max-height:260px;overflow:auto;padding:10px 12px;
+    font-family:var(--mono);font-size:12px;line-height:1.7;color:#c6cedb;
+  }
+  .logline{white-space:pre-wrap;word-break:break-all}
+  .logline .ts{color:#5c6779;margin-right:8px}
+  .logline.k-info{color:#8fd3ff}
+  .logline.k-ok{color:#71d19a}
+  .logline.k-err{color:#ff8f80}
+  .logline.empty{color:#5c6779}
+
+  .empty{
+    border:1px dashed var(--line-strong);border-radius:var(--radius);
+    background:#fbfbfc;padding:34px 18px;text-align:center;color:var(--muted);
+  }
+  .empty h2{margin:0 0 6px;font-size:15px;color:var(--text);font-weight:650}
+  .empty p{margin:0 0 14px;font-size:13px}
+
+  .foot{margin-top:18px;font-size:12px;color:#8b9099;line-height:1.8}
+
+  /* ---------- toast ---------- */
+  #toasts{position:fixed;left:50%;transform:translateX(-50%);bottom:22px;z-index:50;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+  .toast{
+    padding:10px 16px;border-radius:10px;font-size:13px;font-weight:550;
+    background:#1d2229;color:#fff;box-shadow:0 8px 24px rgba(16,24,40,.18);
+    animation:rise .22s ease-out;max-width:86vw;
+  }
+  .toast.err{background:#8f2417}
+  .toast.ok{background:var(--accent-dark)}
+  .toast.warn{background:#8a5a0b}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  @media (min-width:768px){
+    .top{padding:14px 22px}
+    .wrap{padding:22px}
+    .stat{padding:12px 16px}
+    .stat b{font-size:21px}
+    .card{padding:16px 18px}
+    .meta{margin-bottom:14px}
+  }
+  @media (max-width:420px){
+    .brand .sub{display:none}
+    .btn{padding:0 11px}
+    .top-actions{width:100%;margin-left:0}
+    .top-actions .btn{flex:1 1 auto}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="8" fill="#157a5b"/>
+      <path d="M11 9v9a5 5 0 0 0 5 5h4" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+      <circle cx="11" cy="8" r="3" fill="#fff"/>
+      <circle cx="21" cy="23" r="3" fill="#fff"/>
+    </svg>
+    <div>
+      <h1>GitPuller</h1>
+      <p class="sub">多目录定时 git pull</p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <span id="runnerPill" class="pill"><span class="dot"></span><span id="runnerText">已暂停</span></span>
+    <button id="runnerBtn" class="btn primary">启动</button>
+    <button id="allBtn" class="btn">全部拉取</button>
+    <button id="addBtn" class="btn">添加目录</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="stats">
+    <div class="stat"><b id="statTotal">0</b><span>监控目录</span></div>
+    <div class="stat"><b id="statEnabled">0</b><span>已启用</span></div>
+    <div class="stat warn"><b id="statFail">0</b><span>失败次数</span></div>
+  </div>
+
+  <!-- ===== 添加面板 ===== -->
+  <section id="addPanel" class="panel hidden">
+    <h2>添加 Git 目录</h2>
+    <div class="field">
+      <label for="pathInput">仓库目录（含 .git）</label>
+      <div class="row">
+        <div class="grow"><input id="pathInput" type="text" spellcheck="false" placeholder="/Volumes/macHe/GIT_CODE/UNIAPP/hongniang-uniapp"></div>
+        <button id="browseBtn" class="btn" style="min-height:42px">浏览…</button>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field">
+        <label for="intervalInput">拉取间隔</label>
+        <select id="intervalInput" style="width:100%;min-height:42px">
+          <option value="30">30 秒</option>
+          <option value="60" selected>1 分钟</option>
+          <option value="120">2 分钟</option>
+          <option value="300">5 分钟</option>
+          <option value="600">10 分钟</option>
+          <option value="1800">30 分钟</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="strategyInput">拉取策略</label>
+        <select id="strategyInput" style="width:100%;min-height:42px">
+          <option value="ff-only" selected>ff-only（只快进，最安全）</option>
+          <option value="rebase">rebase（本地领先时变基）</option>
+          <option value="merge">merge（生成合并提交）</option>
+        </select>
+      </div>
+    </div>
+    <div class="row end">
+      <button id="addCancel" class="btn ghost">取消</button>
+      <button id="addSubmit" class="btn primary">添加并开始</button>
+    </div>
+    <p class="hint">间隔最小 10 秒。ff-only 不会在你本地产生合并提交；有未提交改动时会自动跳过，不覆盖工作区。</p>
+  </section>
+
+  <section id="list" class="list"></section>
+
+  <p class="foot">
+    配置保存在 <span style="font-family:var(--mono)">~/.gitpuller/config.json</span>，重开即恢复。日志按目录保留最近 400 行。
+  </p>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var state = { runnerOn:false, projects:[], now:"", version:"" };
+  var logs = {};            // id -> [ {ts,text,kind} ]
+  var openLogs = {};        // id -> true
+
+  var $ = function(sel){ return document.querySelector(sel); };
+  var list = document.getElementById("list");
+
+  function esc(s){
+    return String(s == null ? "" : s)
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+
+  function api(method, url, body){
+    var opt = { method: method, headers: { "Content-Type":"application/json" } };
+    if (body !== undefined) opt.body = JSON.stringify(body);
+    return fetch(url, opt).then(function(res){
+      return res.json().catch(function(){ return {}; }).then(function(data){
+        if (!res.ok) throw new Error((data && data.error) || ("请求失败 " + res.status));
+        return data;
+      });
+    });
+  }
+
+  function toast(msg, kind){
+    var box = document.getElementById("toasts");
+    var el = document.createElement("div");
+    el.className = "toast" + (kind ? " " + kind : "");
+    el.textContent = msg;
+    box.appendChild(el);
+    setTimeout(function(){
+      el.style.transition = "opacity .2s";
+      el.style.opacity = "0";
+      setTimeout(function(){ el.remove(); }, 220);
+    }, 3200);
+  }
+
+  /* ---------- 状态文案 ---------- */
+  function statusKey(p){
+    if (p.lastStatus === "running") return "busy";
+    if (p.lastStatus === "fail") return "fail";
+    if (p.lastStatus === "success" || p.lastStatus === "latest") return "ok";
+    return "idle";
+  }
+  function statusText(p){
+    switch (p.lastStatus){
+      case "running": return "拉取中";
+      case "success": return p.newCommits > 0 ? ("已更新 +" + p.newCommits) : "已更新";
+      case "latest":  return "已是最新";
+      case "fail":    return "失败";
+      default:        return "待运行";
+    }
+  }
+
+  var INTERVALS = [
+    [30,"30 秒"], [60,"1 分钟"], [120,"2 分钟"], [300,"5 分钟"], [600,"10 分钟"], [1800,"30 分钟"]
+  ];
+  function intervalOptions(cur){
+    var found = false, html = "";
+    INTERVALS.forEach(function(it){
+      if (it[0] === cur) found = true;
+      html += '<option value="' + it[0] + '"' + (it[0] === cur ? " selected" : "") + ">" + it[1] + "</option>";
+    });
+    if (!found) html = '<option value="' + cur + '" selected>' + cur + " 秒</option>" + html;
+    return html;
+  }
+  function strategyOptions(cur){
+    return [
+      ["ff-only","ff-only 快进"],
+      ["rebase","rebase 变基"],
+      ["merge","merge 合并"]
+    ].map(function(it){
+      return '<option value="' + it[0] + '"' + (it[0] === cur ? " selected" : "") + ">" + it[1] + "</option>";
+    }).join("");
+  }
+
+  function logLineHTML(l){
+    return '<div class="logline k-' + esc(l.kind || "out") + '"><span class="ts">' + esc(l.ts || "") +
+           "</span>" + esc(l.text || "") + "</div>";
+  }
+  function logBodyHTML(id){
+    var arr = logs[id] || [];
+    if (!arr.length) return '<div class="logline empty">暂无日志</div>';
+    return arr.map(logLineHTML).join("");
+  }
+
+  /* ---------- 渲染 ---------- */
+  function cardHTML(p){
+    var key = statusKey(p);
+    var open = !!openLogs[p.id];
+    var metaBits = [];
+    if (p.lastMsg) metaBits.push(esc(p.lastMsg));
+    metaBits.push(p.lastRun ? ("上次 " + esc(p.lastRun)) : "尚未运行");
+    metaBits.push("共 " + (p.totalRuns || 0) + " 次，失败 " + (p.failRuns || 0) + " 次");
+
+    var failPart = p.failRuns > 0
+      ? ' · <span class="bad">失败 ' + p.failRuns + " 次</span>"
+      : "";
+
+    return '' +
+    '<article class="card" data-id="' + esc(p.id) + '">' +
+      '<div class="card-top">' +
+        '<div class="card-title">' +
+          '<span class="dot" style="color:var(--muted)"></span>' +
+          "<h2>" + esc(p.name) + "</h2>" +
+          (p.branch ? '<span class="chip">' + esc(p.branch) + "</span>" : "") +
+          (p.remote ? '<span class="chip muted">' + esc(p.remote) + "</span>" : "") +
+        "</div>" +
+        '<span class="status ' + key + '"><span class="dot"></span>' + esc(statusText(p)) + "</span>" +
+      "</div>" +
+      '<p class="path" title="' + esc(p.path) + '">' + esc(p.path) + "</p>" +
+      '<p class="meta">' + metaBits.join(" · ") + failPart + "</p>" +
+      '<div class="controls">' +
+        '<label class="switch" title="启用 / 暂停该目录">' +
+          '<input type="checkbox" data-act="enabled"' + (p.enabled ? " checked" : "") + ">" +
+          '<span class="slider"></span>' +
+          '<span class="switch-label">' + (p.enabled ? "已启用" : "已暂停") + "</span>" +
+        "</label>" +
+        '<select data-act="interval" title="拉取间隔">' + intervalOptions(p.interval) + "</select>" +
+        '<select data-act="strategy" title="拉取策略">' + strategyOptions(p.strategy) + "</select>" +
+        '<div class="spacer"></div>' +
+        '<button class="btn small" data-act="pull"' + (p.lastStatus === "running" ? " disabled" : "") + ">立即拉取</button>" +
+        '<button class="btn small ghost" data-act="logs">' + (open ? "收起日志" : "日志") + "</button>" +
+        '<button class="btn small ghost-danger" data-act="del">删除</button>' +
+      "</div>" +
+      '<div class="logbox' + (open ? "" : " hidden") + '"><div class="logbody">' + (open ? logBodyHTML(p.id) : "") + "</div></div>" +
+    "</article>";
+  }
+
+  function render(){
+    var total = state.projects.length;
+    var enabled = state.projects.filter(function(p){ return p.enabled; }).length;
+    var fails = state.projects.reduce(function(a, p){ return a + (p.failRuns || 0); }, 0);
+    document.getElementById("statTotal").textContent = total;
+    document.getElementById("statEnabled").textContent = enabled;
+    document.getElementById("statFail").textContent = fails;
+
+    var pill = document.getElementById("runnerPill");
+    var pillText = document.getElementById("runnerText");
+    var btn = document.getElementById("runnerBtn");
+    if (state.runnerOn){
+      pill.classList.add("on");
+      pillText.textContent = "运行中";
+      btn.textContent = "暂停";
+      btn.classList.remove("primary");
+    } else {
+      pill.classList.remove("on");
+      pillText.textContent = "已暂停";
+      btn.textContent = "启动";
+      btn.classList.add("primary");
+    }
+
+    if (!total){
+      list.innerHTML = '' +
+        '<div class="empty">' +
+          "<h2>还没有监控的目录</h2>" +
+          "<p>添加一个 Git 仓库，设定间隔后由它定时替你 pull。</p>" +
+          '<button class="btn primary" id="emptyAdd">添加第一个目录</button>' +
+        "</div>";
+      var ea = document.getElementById("emptyAdd");
+      if (ea) ea.addEventListener("click", function(){ openAdd(); });
+      return;
+    }
+
+    list.innerHTML = state.projects.map(cardHTML).join("");
+
+    // 打开的日志面板滚到底部
+    Object.keys(openLogs).forEach(function(id){
+      var body = list.querySelector('.card[data-id="' + id + '"] .logbody');
+      if (body) body.scrollTop = body.scrollHeight;
+    });
+  }
+
+  function applyState(next){
+    if (!next) return;
+    state.runnerOn = !!next.runnerOn;
+    state.projects = next.projects || [];
+    state.now = next.now || "";
+    state.version = next.version || "";
+    // 清理已删除项目的日志缓存
+    Object.keys(logs).forEach(function(id){
+      if (!state.projects.some(function(p){ return p.id === id; })) delete logs[id];
+    });
+    render();
+  }
+
+  /* ---------- 日志推送 ---------- */
+  function appendLog(id, line){
+    if (!logs[id]) logs[id] = [];
+    logs[id].push(line);
+    if (logs[id].length > 400) logs[id].shift();
+    if (!openLogs[id]) return;
+    var body = list.querySelector('.card[data-id="' + id + '"] .logbody');
+    if (!body) return;
+    var empty = body.querySelector(".logline.empty");
+    if (empty) empty.remove();
+    var tmp = document.createElement("div");
+    tmp.innerHTML = logLineHTML(line);
+    var node = tmp.firstChild;
+    body.appendChild(node);
+    while (body.children.length > 400) body.removeChild(body.firstChild);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  /* ---------- 交互 ---------- */
+  function openAdd(){
+    document.getElementById("addPanel").classList.remove("hidden");
+    var pi = document.getElementById("pathInput");
+    if (!pi.value.trim()) pi.focus();
+    document.getElementById("addPanel").scrollIntoView({ behavior:"smooth", block:"nearest" });
+  }
+  function closeAdd(){ document.getElementById("addPanel").classList.add("hidden"); }
+
+  function addProject(){
+    var path = document.getElementById("pathInput").value.trim();
+    if (!path){ toast("请填写仓库目录", "warn"); return; }
+    var interval = parseInt(document.getElementById("intervalInput").value, 10) || 60;
+    var strategy = document.getElementById("strategyInput").value;
+    var btn = document.getElementById("addSubmit");
+    btn.disabled = true;
+    api("POST", "/api/projects", { path:path, interval:interval, strategy:strategy })
+      .then(function(d){
+        document.getElementById("pathInput").value = "";
+        closeAdd();
+        if (d.state) applyState(d.state);
+        toast("已添加：" + path.split("/").pop(), "ok");
+      })
+      .catch(function(e){ toast(e.message, "err"); })
+      .finally(function(){ btn.disabled = false; });
+  }
+
+  function toggleLogs(id){
+    if (openLogs[id]){ delete openLogs[id]; render(); return; }
+    api("GET", "/api/projects/" + id + "/logs")
+      .then(function(d){
+        logs[id] = d.logs || [];
+        openLogs[id] = true;
+        render();
+      })
+      .catch(function(e){ toast(e.message, "err"); });
+  }
+
+  function patchProject(id, patch){
+    return api("PATCH", "/api/projects/" + id, patch)
+      .then(function(d){ if (d.state) applyState(d.state); })
+      .catch(function(e){ toast(e.message, "err"); });
+  }
+
+  function pullOne(id){
+    api("POST", "/api/projects/" + id + "/pull")
+      .catch(function(e){ toast(e.message, "err"); });
+  }
+
+  function removeOne(id, name){
+    if (!confirm("从列表移除 " + name + "？\n不会删除仓库里的任何文件。")) return;
+    api("DELETE", "/api/projects/" + id)
+      .then(function(d){
+        if (d.state) applyState(d.state);
+        toast("已移除 " + name, "ok");
+      })
+      .catch(function(e){ toast(e.message, "err"); });
+  }
+
+  list.addEventListener("change", function(e){
+    var act = e.target.getAttribute && e.target.getAttribute("data-act");
+    if (!act) return;
+    var card = e.target.closest(".card");
+    if (!card) return;
+    var id = card.getAttribute("data-id");
+
+    if (act === "enabled") patchProject(id, { enabled: e.target.checked });
+    else if (act === "interval") patchProject(id, { interval: parseInt(e.target.value, 10) });
+    else if (act === "strategy") patchProject(id, { strategy: e.target.value });
+  });
+
+  list.addEventListener("click", function(e){
+    var btn = e.target.closest("[data-act]");
+    if (!btn || btn.tagName === "SELECT" || btn.tagName === "INPUT") return;
+    var act = btn.getAttribute("data-act");
+    var card = btn.closest(".card");
+    if (!card) return;
+    var id = card.getAttribute("data-id");
+    var name = (card.querySelector("h2") || {}).textContent || "该项目";
+
+    if (act === "pull") pullOne(id);
+    else if (act === "logs") toggleLogs(id);
+    else if (act === "del") removeOne(id, name);
+  });
+
+  document.getElementById("addBtn").addEventListener("click", openAdd);
+  document.getElementById("addCancel").addEventListener("click", closeAdd);
+  document.getElementById("addSubmit").addEventListener("click", addProject);
+  document.getElementById("pathInput").addEventListener("keydown", function(e){
+    if (e.key === "Enter") addProject();
+  });
+
+  document.getElementById("browseBtn").addEventListener("click", function(){
+    api("POST", "/api/pick-folder")
+      .then(function(d){
+        if (d.path) document.getElementById("pathInput").value = d.path;
+      })
+      .catch(function(e){ toast(e.message, "warn"); });
+  });
+
+  document.getElementById("runnerBtn").addEventListener("click", function(){
+    var on = !state.runnerOn;
+    api("POST", "/api/runner", { on: on })
+      .then(function(d){
+        if (d.state) applyState(d.state);
+        toast(on ? "定时任务已启动" : "定时任务已暂停", on ? "ok" : "warn");
+      })
+      .catch(function(e){ toast(e.message, "err"); });
+  });
+
+  document.getElementById("allBtn").addEventListener("click", function(){
+    var ids = state.projects.filter(function(p){ return p.enabled; }).map(function(p){ return p.id; });
+    if (!ids.length){ toast("没有已启用的目录", "warn"); return; }
+    ids.forEach(pullOne);
+    toast("已触发 " + ids.length + " 个目录的拉取", "ok");
+  });
+
+  /* ---------- 实时连接 ---------- */
+  function connect(){
+    var es = new EventSource("/api/events");
+    es.onmessage = function(ev){
+      var e;
+      try { e = JSON.parse(ev.data); } catch (err){ return; }
+      if (e.type === "state") applyState(e.state);
+      else if (e.type === "log" && e.projectId) appendLog(e.projectId, e.log);
+      else if (e.type === "toast" && e.message) toast(e.message, e.kind);
+    };
+    es.onerror = function(){
+      // EventSource 会自动重连，这里只提示一次
+      if (!connect.warned){
+        connect.warned = true;
+        toast("与服务断开，正在重连…", "warn");
+      }
+    };
+    es.onopen = function(){ connect.warned = false; };
+  }
+
+  // 首屏先拉一次状态，避免等 SSE 建立
+  api("GET", "/api/state").then(function(d){
+    applyState(d);
+    connect();
+  }).catch(function(){
+    connect();
+  });
+})();
+</script>
+</body>
+</html>
